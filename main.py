@@ -6,142 +6,73 @@ from sklearn.metrics import mean_squared_error, r2_score
 import numpy as np
 import matplotlib.pyplot as plt
 
-# --- 1. Get the Data ---
-# Define the ticker symbol for the stock you want to predict (e.g., Apple - AAPL)
-# You can change this to any valid ticker symbol.
-ticker_symbol = "AAPL"
-
-# Define the date range for the historical data
-# Let's get a good amount of data, e.g., 5 years
+# 1. getting the data
+ticker = "AAPL"
 start_date = "2019-01-01"
-end_date = "2024-01-01" # Use a date in the past to have a clear future for testing
+end_date = "2024-01-01"
 
-print(f"Fetching data for {ticker_symbol} from {start_date} to {end_date}...")
-try:
-    stock_data = yf.download(ticker_symbol, start=start_date, end=end_date)
-    print("Data fetched successfully.")
-except Exception as e:
-    print(f"Error fetching data: {e}")
-    # Exit if data fetching fails
-    exit()
-
-# Check if data was downloaded
+print(f"Fetching data for {ticker} from {start_date} to {end_date}...")
+stock_data = yf.download(ticker, start=start_date, end=end_date)
 if stock_data.empty:
-    print(f"No data found for ticker symbol: {ticker_symbol} in the specified date range.")
+    print(f"No data found for ticker symbol: {ticker} in the specified date range.")
     exit()
 
-# Display the first few rows of the fetched data
-print("\nSample of fetched data:")
-print(stock_data.head())
+# 2. preprocessing the data
+close_data = stock_data[['Close']].copy()
+close_data['Target Prediction'] = close_data['Close'].shift(-1)
+close_data.dropna(inplace=True)
 
-# --- 2. Prepare the Data for Linear Regression ---
-# For this simple model, we'll use the 'Adj Close' price as the feature (X)
-# and the next day's 'Adj Close' price as the target (y).
-df = stock_data[['Adj Close']].copy()
+X = close_data[['Close']]
+y = close_data['Target Prediction']
 
-# Create the target variable by shifting the 'Adj Close' column by one day.
-# This means row 'i' will have the 'Adj Close' price from row 'i+1'.
-df['Prediction_Target'] = df['Adj Close'].shift(-1)
+# 3. split the data into 60/20/20 for training, validation, and testing
+data_size = len(close_data)
+train_size = int(data_size * 0.6)
+validation_size = int(data_size * 0.2)
+test_size = data_size - train_size - validation_size
 
-# Drop the last row because it will have a NaN (Not a Number) in the 'Prediction_Target' column
-# as there is no next day's price available.
-df.dropna(inplace=True)
-
-# Display the prepared data
-print("\nSample of prepared data with target variable:")
-print(df.head())
-print(f"\nPrepared data shape: {df.shape}")
-
-
-# Define features (X) and target (y)
-# X is the current day's 'Adj Close' price
-X = df[['Adj Close']]
-# y is the next day's 'Adj Close' price (the target)
-y = df['Prediction_Target']
-
-# --- 3. Splitting the Data (60/20/20 Chronological Split) ---
-# We need to split the data chronologically to simulate real-world prediction,
-# where you train on past data and predict future data.
-# We'll use the index (which is the date) to perform the split.
-
-total_size = len(df)
-train_size = int(total_size * 0.6)
-val_size = int(total_size * 0.2)
-# The remaining data will be the test set
-test_size = total_size - train_size - val_size
-
-print(f"\nTotal data points: {total_size}")
-print(f"Training set size: {train_size}")
-print(f"Validation set size: {val_size}")
-print(f"Test set size: {test_size}")
-
-# Perform the chronological split
-# Training data: first 60% of the data
 X_train, y_train = X[:train_size], y[:train_size]
-
-# Temporary data for validation and test: the remaining 40%
 X_temp, y_temp = X[train_size:], y[train_size:]
+X_val, y_val = X_temp[:validation_size], y_temp[:validation_size]
+X_test, y_test = X_temp[validation_size:], y_temp[validation_size:]
 
-# Validation data: the first half of the temporary data (20% of total)
-X_val, y_val = X_temp[:val_size], y_temp[:val_size]
-
-# Test data: the second half of the temporary data (remaining 20% of total)
-X_test, y_test = X_temp[val_size:], y_temp[val_size:]
-
-print(f"\nShape of training data (X_train, y_train): {X_train.shape}, {y_train.shape}")
-print(f"Shape of validation data (X_val, y_val): {X_val.shape}, {y_val.shape}")
-print(f"Shape of test data (X_test, y_test): {X_test.shape}, {y_test.shape}")
-
-
-# --- 4. Building and Training the Linear Regression Model ---
-print("\nBuilding and training the Linear Regression model...")
-# Create a Linear Regression model instance
+# 4. using linear regression model to predict next day's price
 model = LinearRegression()
-
-# Train the model using the training data
 model.fit(X_train, y_train)
-print("Model training complete.")
 
-# Print the learned coefficients
-print(f"\nModel Coefficient (slope): {model.coef_[0]}")
-print(f"Model Intercept: {model.intercept_}")
+# 5. outputting model statistics
+model_slope = model.coef_[0]
+model_intercept = model.intercept_
 
-# --- 5. Making Predictions and Evaluating the Model ---
-
-# Make predictions on the validation set
-print("\nEvaluating model on validation set...")
-y_val_pred = model.predict(X_val)
-
-# Evaluate the model's performance on the validation set
-mse_val = mean_squared_error(y_val, y_val_pred)
-r2_val = r2_score(y_val, y_val_pred)
-
-print(f"Validation Set Evaluation:")
-print(f"Mean Squared Error (MSE): {mse_val}")
-print(f"R-squared (R2): {r2_val}")
-
-# Make predictions on the test set
-print("\nEvaluating model on test set...")
+# 6. make predictions
 y_test_pred = model.predict(X_test)
 
-# Evaluate the model's performance on the test set
-mse_test = mean_squared_error(y_test, y_test_pred)
-r2_test = r2_score(y_test, y_test_pred)
+# 7. generate the side by side plots
+fig, axes = plt.subplots(1, 2, figsize=(22, 8))
 
-print(f"Test Set Evaluation:")
-print(f"Mean Squared Error (MSE): {mse_test}")
-print(f"R-squared (R2): {r2_test}")
+# plot 1 showing the linear regression line
+ax1 = axes[0]
+ax1.scatter(X_test, y_test, alpha=0.7, c='blue', label='Actual Price Today vs Actual Price Tomorrow')
+x_line = np.linspace(X_test['Close'].min(), X_test['Close'].max(), 100)
+y_line = model_slope * x_line + model_intercept
+line_label = f'Model Prediction Line (y = {model_slope:.4f}x + {model_intercept:.4f})'
+ax1.plot(x_line, y_line, color='black', linestyle='--', linewidth=2, label=line_label)
+ax1.set_title(f'Actual Prices vs Model Prediction Line ({ticker}) - Test Set', fontsize=14)
+ax1.set_xlabel('Price Today', fontsize=12)
+ax1.set_ylabel('Price Tomorrow', fontsize=12)
+ax1.legend()
+ax1.grid(True)
 
-# --- Optional: Visualize Predictions vs Actual ---
-print("\nGenerating plot of actual vs predicted prices on the test set...")
-plt.figure(figsize=(14, 7))
-plt.plot(y_test.index, y_test, label='Actual Prices', color='blue')
-plt.plot(y_test.index, y_test_pred, label='Predicted Prices', color='red', linestyle='--')
-plt.title(f'Stock Price Prediction ({ticker_symbol}) - Linear Regression (Test Set)')
-plt.xlabel('Date')
-plt.ylabel('Adjusted Close Price')
-plt.legend()
-plt.grid(True)
+# plot 2 showing the progression of data with time
+ax2 = axes[1]
+ax2.plot(y_test.index, y_test, label='Actual Prices', color='blue', linewidth=2)
+ax2.plot(y_test.index, y_test_pred, label='Predicted Prices (Model Output)', color='red', linestyle='--', linewidth=2)
+ax2.set_title(f'Stock Price Prediction ({ticker}) - Time Series (Test Set)', fontsize=14)
+ax2.set_xlabel('Date', fontsize=12)
+ax2.set_ylabel('Close Price', fontsize=12)
+ax2.legend()
+ax2.grid(True)
+
+# 8. make prettier and show plots
+plt.subplots_adjust(left=0.08, right=0.97, bottom=0.1, top=0.9, wspace=0.25, hspace=0.2)
 plt.show()
-
-print("\nScript finished.")
