@@ -1,7 +1,0 @@
---- Validation Set Performance ---
-Validation Mean Squared Error (MSE): 11.3850
-Validation R-squared (R2): 0.9285
-
---- Test Set Performance ---
-Test Mean Squared Error (MSE): 4.4978
-Test R-squared (R2): 0.9856
