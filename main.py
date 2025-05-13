@@ -21,7 +21,6 @@ if stock_data.empty:
     exit()
 
 # --- 2. Feature Engineering ---
-print("\n--- Feature Engineering ---")
 stock_data['Price Change'] = stock_data['Close'].diff()
 # Predict NEXT day's price up (1) or down/same (0) based on CURRENT day's features
 stock_data['Target'] = np.where(stock_data['Price Change'].shift(-1) > 0, 1, 0)
@@ -65,16 +64,11 @@ if X.isnull().values.any() or y.isnull().values.any():
     X = X.loc[common_index]
     y = y.loc[common_index]
 
-
-print(f"Number of features: {len(X.columns)}")
-print(f"Features: {X.columns.tolist()}")
-print(f"Shape of X: {X.shape}, Shape of y: {y.shape}")
 if X.empty or y.empty or X.shape[0] != y.shape[0]:
     print("X or y is empty or shapes mismatch after feature engineering and NaN handling. Exiting.")
     exit()
 
 # --- 3. Data Splitting (Chronological) ---
-print("\n--- Data Splitting ---")
 train_size_pct = 0.6
 val_size_pct = 0.2
 train_idx = int(len(X) * train_size_pct)
@@ -84,23 +78,17 @@ X_train, y_train = X.iloc[:train_idx], y.iloc[:train_idx]
 X_val, y_val = X.iloc[train_idx:val_idx], y.iloc[train_idx:val_idx]
 X_test, y_test = X.iloc[val_idx:], y.iloc[val_idx:]
 
-print(f"Train set size: {X_train.shape[0]}")
-print(f"Validation set size: {X_val.shape[0]}")
-print(f"Test set size: {X_test.shape[0]}")
-
 if X_train.empty or X_val.empty or X_test.empty:
     print("One of the data splits is empty. Adjust data range or split percentages. Exiting.")
     exit()
 
 # --- 4. Feature Scaling ---
-print("\n--- Feature Scaling ---")
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_val_scaled = scaler.transform(X_val)
 X_test_scaled = scaler.transform(X_test)
 
 # --- 5. Logistic Regression Model ---
-print("\n--- Model Training ---")
 model = LogisticRegression(class_weight='balanced', solver='liblinear', random_state=42, max_iter=1000)
 model.fit(X_train_scaled, y_train)
 
@@ -108,106 +96,39 @@ model.fit(X_train_scaled, y_train)
 y_val_pred = model.predict(X_val_scaled)
 y_test_pred = model.predict(X_test_scaled)
 
+# --- 7. Performance Reports ---
+val_report = classification_report(y_val, y_val_pred, zero_division=0, output_dict=True)
+test_report = classification_report(y_test, y_test_pred, zero_division=0, output_dict=True)
+
 # Combined Confusion Matrices Plot
-print("\n--- Combined Confusion Matrices ---")
-fig, axes = plt.subplots(1, 2, figsize=(16, 6)) # 1 row, 2 columns
+fig, axes = plt.subplots(2, 2, figsize=(16, 6)) # 2 rows, 2 columns
 
 # Validation Confusion Matrix
 cm_val = confusion_matrix(y_val, y_val_pred)
-sns.heatmap(cm_val, annot=True, fmt='d', cmap='Blues', xticklabels=['Down/Same', 'Up'], yticklabels=['Down/Same', 'Up'], ax=axes[0])
-axes[0].set_xlabel('Predicted Labels')
-axes[0].set_ylabel('True Labels')
-axes[0].set_title('Validation Confusion Matrix', y=1.02) # Adjust title position
+sns.heatmap(cm_val, annot=True, fmt='d', cmap='Blues', xticklabels=['Down/Same', 'Up'], yticklabels=['Down/Same', 'Up'], ax=axes[0, 0])
+axes[0, 0].set_xlabel('Predicted Labels')
+axes[0, 0].set_ylabel('True Labels')
+axes[0, 0].set_title('Validation Confusion Matrix', y=1.02) # Adjust title position
 
 # Test Confusion Matrix
 cm_test = confusion_matrix(y_test, y_test_pred)
-sns.heatmap(cm_test, annot=True, fmt='d', cmap='viridis', xticklabels=['Down/Same', 'Up'], yticklabels=['Down/Same', 'Up'], ax=axes[1])
-axes[1].set_xlabel('Predicted Labels')
-axes[1].set_ylabel('True Labels')
-axes[1].set_title('Test Confusion Matrix', y=1.02) # Adjust title position
+sns.heatmap(cm_test, annot=True, fmt='d', cmap='viridis', xticklabels=['Down/Same', 'Up'], yticklabels=['Down/Same', 'Up'], ax=axes[0, 1])
+axes[0, 1].set_xlabel('Predicted Labels')
+axes[0, 1].set_ylabel('True Labels')
+axes[0, 1].set_title('Test Confusion Matrix', y=1.02) # Adjust title position
 
+# Validation Classification Report as Text
+val_report_text = classification_report(y_val, y_val_pred, zero_division=0)
+axes[1, 0].text(0.05, 0.95, val_report_text, fontsize=10, verticalalignment='top', horizontalalignment='left', fontfamily='monospace')
+axes[1, 0].axis('off')
+axes[1, 0].set_title('Validation Classification Report')
+
+# Test Classification Report as Text
+test_report_text = classification_report(y_test, y_test_pred, zero_division=0)
+axes[1, 1].text(0.05, 0.95, test_report_text, fontsize=10, verticalalignment='top', horizontalalignment='left', fontfamily='monospace')
+axes[1, 1].axis('off')
+axes[1, 1].set_title('Test Classification Report')
+
+plt.suptitle('Model Performance', fontsize=16, y=0.95) # Overall title for the figure, move it down slightly
 plt.tight_layout(pad=3.0) # Add some padding between subplots and title
-plt.suptitle('Model Confusion Matrices', fontsize=16, y=0.95) # Overall title for the figure, move it down slightly
 plt.show()
-
-# Classification Reports (printed after the plots)
-print(f'\n--- Validation Set Performance ---')
-accuracy_val = accuracy_score(y_val, y_val_pred)
-print(f'Validation Accuracy: {accuracy_val:.4f}')
-print("Validation Classification Report:")
-print(classification_report(y_val, y_val_pred, zero_division=0))
-
-print(f'\n--- Test Set Performance ---')
-accuracy_test = accuracy_score(y_test, y_test_pred)
-print(f'Test Accuracy: {accuracy_test:.4f}')
-print("Test Classification Report:")
-print(classification_report(y_test, y_test_pred, zero_division=0))
-
-
-# --- 7. Feature Importance (Coefficients) ---
-if hasattr(model, 'coef_'):
-    print("\n--- Feature Importance (Model Coefficients) ---")
-    
-    # Ensure X_train (used for scaler and columns) has same columns as X (used for model)
-    feature_names_for_plot = X_train.columns.tolist()
-    coefficients_for_plot = model.coef_[0]
-
-    if len(feature_names_for_plot) == len(coefficients_for_plot):
-        importance_df = pd.DataFrame({
-            'Feature': feature_names_for_plot,
-            'Coefficient': coefficients_for_plot
-        }).sort_values(by='Coefficient', ascending=False)
-
-        print("Top 5 important features head:")
-        print(importance_df.head())
-        print(f"\nPlotting barplot with {len(importance_df)} features.")
-
-        if not importance_df.empty:
-            print("\n--- Barplot Debug Info ---")
-            print("Features to plot (first 5):", importance_df['Feature'].head().tolist())
-            print("Type of 'Feature' column:", type(importance_df['Feature']))
-            if not importance_df['Feature'].empty:
-                 print("Type of first element in 'Feature' column:", type(importance_df['Feature'].iloc[0]))
-            is_tuple_list = [isinstance(item, tuple) for item in importance_df['Feature']]
-            if any(is_tuple_list):
-                print("WARNING: 'Feature' column contains tuples!")
-            else:
-                print("'Feature' column does not appear to contain tuples directly.")
-            
-            try:
-                plt.figure(figsize=(12, max(6, len(importance_df) * 0.4))) # Dynamic height
-                sns.barplot(
-                    x='Coefficient',
-                    y='Feature',
-                    data=importance_df,
-                    order=importance_df['Feature'].tolist(), # Explicitly set order
-                    palette='coolwarm'
-                )
-                plt.title('Feature Importance (Logistic Regression Coefficients)')
-                plt.xlabel('Coefficient Value (Log-Odds)')
-                plt.ylabel('Feature Name')
-                plt.grid(axis='x', linestyle='--', alpha=0.7)
-                plt.tight_layout()
-                plt.show()
-            except ValueError as e:
-                print(f"\nERROR plotting feature importance barplot: {e}")
-                print("This can sometimes happen due to unexpected feature name structures or internal seaborn/pandas issues.")
-                print("The feature importance data is still available in 'importance_df':")
-                print(importance_df)
-            except Exception as e_gen: # Catch any other potential plotting errors
-                print(f"\nAn unexpected error occurred during feature importance plotting: {e_gen}")
-                print(importance_df)
-
-        else:
-            print("Importance DataFrame is empty, skipping feature importance plot.")
-    else:
-        print(f"Mismatch between number of feature names ({len(feature_names_for_plot)}) and coefficients ({len(coefficients_for_plot)}). Skipping feature importance plot.")
-
-# --- Check Class Distribution ---
-print("\n--- Class Distribution ---")
-print("Training Set Class Distribution:")
-print(y_train.value_counts(normalize=True))
-print("\nValidation Set Class Distribution:")
-print(y_val.value_counts(normalize=True))
-print("\nTest Set Class Distribution:")
-print(y_test.value_counts(normalize=True))
