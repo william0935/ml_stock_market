@@ -44,8 +44,23 @@ model.fit(X_train, y_train)
 model_slope = model.coef_[0]
 model_intercept = model.intercept_
 
+## 5.5 evaluate on validation set
+print(f'\n--- Validation Set Performance ---')
+y_val_pred = model.predict(X_val)
+mse_val = mean_squared_error(y_val, y_val_pred)
+r2_val = r2_score(y_val, y_val_pred)
+print(f'Validation Mean Squared Error (MSE): {mse_val:.4f}')
+print(f'Validation R-squared (R2): {r2_val:.4f}')
+
 # 6. make predictions
 y_test_pred = model.predict(X_test)
+
+## 6.5 Evaluate the model on the test set
+print(f'\n--- Test Set Performance ---')
+mse_test = mean_squared_error(y_test, y_test_pred)
+r2_test = r2_score(y_test, y_test_pred)
+print(f'Test Mean Squared Error (MSE): {mse_test:.4f}')
+print(f'Test R-squared (R2): {r2_test:.4f}\n')
 
 # 7. generate the side by side plots
 fig, axes = plt.subplots(1, 2, figsize=(22, 8))
