@@ -13,7 +13,7 @@ def load_stock_data(ticker, start_date, end_date):
     Returns:
         pandas.DataFrame: The stock data.
     """
-    stock_data = yf.download(ticker, start=start_date, end=end_date, progress=False)
+    stock_data = yf.download(ticker, start=start_date, end=end_date, progress=False, auto_adjust=False)  # Explicitly set auto_adjust
     if stock_data.empty:
         print(f"No data found for ticker symbol: {ticker} in the specified date range.")
         return None

@@ -3,11 +3,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
+from sklearn.linear_model import SGDClassifier  # Changed import
+from sklearn.preprocessing import StandardScaler
+from sklearn.utils.class_weight import compute_class_weight  # Import compute_class_weight
 
 # Import local modules
 from data_loader import load_stock_data
 from features import create_features, prepare_data
-from model import train_model, evaluate_model
+from model import evaluate_model  # Assuming evaluate_model doesn't depend on the training process
 from visualizations import plot_confusion_matrices, plot_classification_reports, show_plot
 
 # --- 1. Data Fetching ---
@@ -33,53 +36,67 @@ X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.
 if X_train.empty or X_val.empty or X_test.empty:
     exit()
 
-# --- 4. Hyperparameter Tuning and Model Training ---
-best_C = None
-best_model = None
-best_scaler = None
-best_val_accuracy = 0.0
-best_train_sizes = None
-best_train_scores_mean = None
-best_val_scores_mean = None
+# --- 4. Feature Scaling ---
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_val_scaled = scaler.transform(X_val)
+X_test_scaled = scaler.transform(X_test)
 
-C_values = [0.001, 0.01, 0.1, 1, 10, 100]  # Example C values
+# --- 5. Calculate Class Weights ---
+classes = np.unique(y_train)
+class_weights = compute_class_weight('balanced', classes=classes, y=y_train)
+class_weight_dict = dict(zip(classes, class_weights))  # Create a dictionary
 
-for C in C_values:
-    model, scaler, train_sizes, train_scores_mean, val_scores_mean = train_model(X_train, y_train, X_val, y_val, C=C)
+# --- 6. Model Training with SGD and Loss Tracking ---
+model = SGDClassifier(
+    loss='log_loss',  # Specify log loss for Logistic Regression
+    #class_weight='balanced',  # Remove 'balanced'
+    class_weight=class_weight_dict,  # Pass the dictionary
+    random_state=42,
+    max_iter=1000,
+    tol=1e-3,  # Tolerance for stopping criteria
+    learning_rate='adaptive',
+    eta0=0.1
+)
 
-    # Evaluate on validation set
-    X_val_scaled = scaler.transform(X_val)
-    y_val_pred = model.predict(X_val_scaled)
-    val_accuracy = accuracy_score(y_val, y_val_pred)
+loss_values = []  # Store training loss values
+val_loss_values = []  # Store validation loss values
+X_train_scaled = np.asarray(X_train_scaled)
+y_train = np.asarray(y_train)
+X_val_scaled = np.asarray(X_val_scaled)
+y_val = np.asarray(y_val)
 
-    print(f"C: {C}, Validation Accuracy: {val_accuracy:.4f}")
+for i in range(model.max_iter):
+    model.partial_fit(X_train_scaled, y_train, classes=np.unique(y_train))  # Train one iteration
 
-    if val_accuracy > best_val_accuracy:
-        best_val_accuracy = val_accuracy
-        best_C = C
-        best_model = model
-        best_scaler = scaler
-        best_train_sizes = train_sizes
-        best_train_scores_mean = train_scores_mean
-        best_val_scores_mean = val_scores_mean
+    # Calculate training loss
+    y_train_pred = model.predict_proba(X_train_scaled)
+    train_loss = -np.mean(y_train * np.log(y_train_pred[:, 1]) + (1 - y_train) * np.log(1 - y_train_pred[:, 1]))
+    loss_values.append(train_loss)
 
-print(f"\nBest C: {best_C}, Best Validation Accuracy: {best_val_accuracy:.4f}")
+    # Calculate validation loss
+    y_val_pred = model.predict_proba(X_val_scaled)
+    val_loss = -np.mean(y_val * np.log(y_val_pred[:, 1]) + (1 - y_val) * np.log(1 - y_val_pred[:, 1]))
+    val_loss_values.append(val_loss)
 
-# --- 5. Plot Learning Curves ---
+    if i > 1 and abs(loss_values[-1] - loss_values[-2]) < model.tol:
+        break
+
+# --- 7. Plot Loss Curve ---
 plt.figure(figsize=(10, 6))
-plt.plot(best_train_sizes, best_train_scores_mean, label='Training Accuracy')
-plt.plot(best_train_sizes, best_val_scores_mean, label='Validation Accuracy')
-plt.xlabel('Training Set Size')
-plt.ylabel('Accuracy')
-plt.title('Learning Curves')
-plt.legend()
+plt.plot(loss_values, label='Training Loss')
+plt.plot(val_loss_values, label='Validation Loss')
+plt.xlabel('Iteration')
+plt.ylabel('Loss')
+plt.title('Loss Curve')
 plt.grid(True)
+plt.legend()  # Show legend to distinguish between lines
 plt.show()
 
-# --- 6. Model Evaluation ---
-y_val_pred, y_test_pred, val_report, test_report, X_val_scaled, X_test_scaled = evaluate_model(best_model, best_scaler, X_val, y_val, X_test, y_test)
+# --- 8. Model Evaluation ---
+y_val_pred, y_test_pred, val_report, test_report, X_val_scaled, X_test_scaled = evaluate_model(model, scaler, X_val, y_val, X_test, y_test)
 
-# --- 7. Visualization ---
+# --- 9. Visualization ---
 fig, axes = plot_confusion_matrices(y_val, y_val_pred, y_test, y_test_pred)
 plot_classification_reports(axes, val_report, test_report)
 show_plot(fig)

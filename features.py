@@ -29,8 +29,8 @@ def create_features(stock_data, sma_short_window=10, sma_long_window=50, rsi_win
     loss = (-delta.where(delta < 0, 0)).rolling(window=rsi_window).mean()
     rs = gain / loss
     stock_data['RSI'] = 100 - (100 / (1 + rs))
-    stock_data['RSI'].replace([np.inf, -np.inf], 100, inplace=True)
-    stock_data['RSI'].fillna(50, inplace=True)
+    stock_data.loc[:, 'RSI'] = stock_data['RSI'].replace([np.inf, -np.inf], 100)  # Use .loc
+    stock_data.loc[:, 'RSI'] = stock_data['RSI'].fillna(50)  # Use .loc
 
     stock_data['Volume_Change_Pct'] = stock_data['Volume'].pct_change()
 
